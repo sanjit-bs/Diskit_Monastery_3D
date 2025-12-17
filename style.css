@@ -778,7 +778,7 @@ body.single-scene #sceneList, body.single-scene #sceneListToggle {
 
 /* View control buttons */
 
-.viewControlButton {
+/* .viewControlButton {
   display: none;
   position: absolute;
   bottom: 0;
@@ -792,10 +792,10 @@ body.single-scene #sceneList, body.single-scene #sceneListToggle {
 
 body.view-control-buttons .viewControlButton {
   display: block;
-}
+} */
 
 /* Hide controls when width is too small */
-@media (max-width: 600px) {
+/* @media (max-width: 600px) {
   body.view-control-buttons .viewControlButton {
     display: none;
   }
@@ -807,7 +807,7 @@ body.view-control-buttons .viewControlButton {
   right: 5px;
   width: 30px;
   height: 30px;
-}
+} */
 
 /* Center is at margin-left: -20px */
 /* .viewControlButton-1 {
