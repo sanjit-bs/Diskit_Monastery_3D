@@ -828,3 +828,23 @@ body.view-control-buttons .viewControlButton {
 .viewControlButton-6 {
   margin-left: 105px;
 }
+.auto-tour {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  color: #fff;
+  background-color: #2e7d32; /* green */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  z-index: 1000;
+  user-select: none;
+}
+.auto-tour.interacting {
+  background-color: #f57c00; /* orange */
+}
+.auto-tour.stopped {
+  background-color: #616161; /* grey */
+}
