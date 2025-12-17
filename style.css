@@ -810,7 +810,7 @@ body.view-control-buttons .viewControlButton {
 }
 
 /* Center is at margin-left: -20px */
-.viewControlButton-1 {
+/* .viewControlButton-1 {
   margin-left: -145px;
 }
 .viewControlButton-2 {
@@ -827,7 +827,7 @@ body.view-control-buttons .viewControlButton {
 }
 .viewControlButton-6 {
   margin-left: 105px;
-}
+} */
 .auto-tour {
   position: fixed;
   bottom: 16px;
