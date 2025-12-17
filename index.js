@@ -22,7 +22,7 @@
   var data = window.APP_DATA;
 
   /* ===============================
-     DOM
+     DOM ELEMENTS
   =============================== */
 
   var panoElement = document.getElementById('pano');
@@ -73,132 +73,117 @@
       pinFirstLevel: true
     });
 
-    /* HOTSPOTS (unchanged, FIXED scaling) */
-
-    sceneData.linkHotspots.forEach(function (hotspot) {
-      scene.hotspotContainer().createHotspot(
-        createLinkHotspotElement(hotspot),
-        { yaw: hotspot.yaw, pitch: hotspot.pitch }
-      );
-    });
-
-    sceneData.infoHotspots.forEach(function (hotspot) {
-      scene.hotspotContainer().createHotspot(
-        createInfoHotspotElement(hotspot),
-        { yaw: hotspot.yaw, pitch: hotspot.pitch }
-      );
-    });
-
     return { data: sceneData, scene: scene, view: view };
   });
 
   /* ===============================
-     AUTOTOUR
+     AUTOTOUR CONFIG
   =============================== */
 
   var autorotate = Marzipano.autorotate({
-    yawSpeed: 0.03,   // ✅ FIXED (was 5)
+    yawSpeed: 5,
     targetPitch: 0,
     targetFov: Math.PI / 2
   });
 
   var currentSceneIndex = 0;
   var lastYaw = 0;
-  var accumulatedYaw = 0;
-  var autoRunning = false;
+  var rotationCounter = 0;
+  var autoSwitchRunning = false;
   var userInteracting = false;
-  var resumeTimer = null;
+  var interactionTimeout = null;
+
+  /* ===============================
+     STATUS BOX
+  =============================== */
 
   function updateAutoTourStatus(state) {
     autoTourStatusBox.classList.remove('stopped', 'interacting');
 
     if (state === 'running') {
-      autoTourStatusBox.textContent = 'Auto tour running';
+      autoTourStatusBox.textContent = 'Auto tour is running';
     } else if (state === 'stopped') {
       autoTourStatusBox.textContent = 'Auto tour stopped';
       autoTourStatusBox.classList.add('stopped');
     } else if (state === 'interacting') {
-      autoTourStatusBox.textContent = 'User interaction';
+      autoTourStatusBox.textContent = 'Auto tour is interacting';
       autoTourStatusBox.classList.add('interacting');
     }
   }
 
-  function startAutoTour() {
-    if (autoRunning) return;
+  /* ===============================
+     AUTOROTATION CONTROL
+  =============================== */
+
+  function startAutorotate() {
+    if (!autorotateToggleElement.classList.contains('enabled')) return;
 
     var scene = scenes[currentSceneIndex];
     lastYaw = scene.view.parameters().yaw;
-    accumulatedYaw = 0;
+    rotationCounter = 0;
 
     viewer.startMovement(autorotate);
-    viewer.setIdleMovement(2000, autorotate);
+    viewer.setIdleMovement(3000, autorotate);
 
-    autoRunning = true;
+    autoSwitchRunning = true;
+    requestAnimationFrame(autoSwitchMonitor);
+
     updateAutoTourStatus('running');
-    requestAnimationFrame(monitorRotation);
   }
 
-  function stopAutoTour() {
+  function stopAutorotate() {
     viewer.stopMovement();
     viewer.setIdleMovement(Infinity);
-    autoRunning = false;
+    autoSwitchRunning = false;
     updateAutoTourStatus('stopped');
   }
 
-  function monitorRotation() {
-    if (!autoRunning || userInteracting) {
-      requestAnimationFrame(monitorRotation);
+  function autoSwitchMonitor() {
+    if (!autoSwitchRunning || userInteracting) {
+      requestAnimationFrame(autoSwitchMonitor);
       return;
     }
 
-    var view = scenes[currentSceneIndex].view;
-    var yaw = view.parameters().yaw;
+    var scene = scenes[currentSceneIndex];
+    var yaw = scene.view.parameters().yaw;
 
-    var delta = yaw - lastYaw;
-    if (delta > Math.PI) delta -= 2 * Math.PI;
-    if (delta < -Math.PI) delta += 2 * Math.PI;
+    var deltaYaw = yaw - lastYaw;
+    if (deltaYaw > Math.PI) deltaYaw -= 2 * Math.PI;
+    if (deltaYaw < -Math.PI) deltaYaw += 2 * Math.PI;
 
-    accumulatedYaw += Math.abs(delta);
+    rotationCounter += Math.abs(deltaYaw);
     lastYaw = yaw;
 
-    if (accumulatedYaw >= 2 * Math.PI) {
-      goToNextScene();
+    if (rotationCounter >= 2 * Math.PI) {
+      currentSceneIndex = (currentSceneIndex + 1) % scenes.length;
+      switchScene(scenes[currentSceneIndex], true);
       return;
     }
 
-    requestAnimationFrame(monitorRotation);
+    requestAnimationFrame(autoSwitchMonitor);
   }
 
-  function goToNextScene() {
-    stopAutoTour();
-
-    currentSceneIndex =
-      (currentSceneIndex + 1) % scenes.length;
-
-    var next = scenes[currentSceneIndex];
-    next.view.setParameters(next.data.initialViewParameters);
-    next.scene.switchTo();
-
-    updateSceneName(next);
-    updateSceneList(next);
-
-    setTimeout(startAutoTour, 800);
-  }
+  autorotateToggleElement.addEventListener('click', function () {
+    autorotateToggleElement.classList.toggle('enabled');
+    autorotateToggleElement.classList.contains('enabled')
+      ? startAutorotate()
+      : stopAutorotate();
+  });
 
   /* ===============================
      USER INTERACTION
   =============================== */
 
   function onUserInteraction() {
-    if (!autoRunning) return;
+    if (!autoSwitchRunning) return;
 
     userInteracting = true;
     updateAutoTourStatus('interacting');
 
-    clearTimeout(resumeTimer);
-    resumeTimer = setTimeout(function () {
+    clearTimeout(interactionTimeout);
+    interactionTimeout = setTimeout(function () {
       userInteracting = false;
-      startAutoTour();
+      updateAutoTourStatus('running');
     }, 1500);
   }
 
@@ -207,38 +192,25 @@
   panoElement.addEventListener('touchstart', onUserInteraction);
 
   /* ===============================
-     UI
+     SCENE SWITCHING
   =============================== */
 
-  autorotateToggleElement.addEventListener('click', function () {
-    autorotateToggleElement.classList.toggle('enabled');
-    autorotateToggleElement.classList.contains('enabled')
-      ? startAutoTour()
-      : stopAutoTour();
-  });
+  function switchScene(sceneObj, fromAutoSwitch) {
+    stopAutorotate();
 
-  sceneListToggleElement.addEventListener('click', function () {
-    sceneListElement.classList.toggle('enabled');
-  });
+    sceneObj.view.setParameters(sceneObj.data.initialViewParameters);
+    sceneObj.scene.switchTo();
 
-  scenes.forEach(function (scene) {
-    var el = document.querySelector(
-      '#sceneList .scene[data-id="' + scene.data.id + '"]'
-    );
-    el.addEventListener('click', function () {
-      stopAutoTour();
-      currentSceneIndex = scenes.indexOf(scene);
-      scene.scene.switchTo();
-      updateSceneName(scene);
-      updateSceneList(scene);
-      startAutoTour();
-    });
-  });
+    currentSceneIndex = scenes.indexOf(sceneObj);
+    lastYaw = sceneObj.view.parameters().yaw;
+    rotationCounter = 0;
 
-  if (screenfull.enabled) {
-    fullscreenToggleElement.addEventListener('click', function () {
-      screenfull.toggle();
-    });
+    updateSceneName(sceneObj);
+    updateSceneList(sceneObj);
+
+    if (!fromAutoSwitch) userInteracting = false;
+
+    startAutorotate();
   }
 
   function updateSceneName(scene) {
@@ -255,35 +227,26 @@
   }
 
   /* ===============================
-     HOTSPOT HELPERS
+     UI
   =============================== */
 
-  function createLinkHotspotElement(hotspot) {
-    var wrapper = document.createElement('div');
-    wrapper.className = 'link-hotspot';
+  sceneListToggleElement.addEventListener('click', function () {
+    sceneListElement.classList.toggle('enabled');
+  });
 
-    var icon = document.createElement('img');
-    icon.src = 'img/link.png';
-    icon.className = 'link-hotspot-icon';
-
-    wrapper.appendChild(icon);
-    wrapper.addEventListener('click', function () {
-      stopAutoTour();
-      var target = scenes.find(s => s.data.id === hotspot.target);
-      currentSceneIndex = scenes.indexOf(target);
-      target.scene.switchTo();
-      startAutoTour();
+  scenes.forEach(function (scene) {
+    var el = document.querySelector(
+      '#sceneList .scene[data-id="' + scene.data.id + '"]'
+    );
+    el.addEventListener('click', function () {
+      switchScene(scene, false);
     });
+  });
 
-    return wrapper;
-  }
-
-  function createInfoHotspotElement(hotspot) {
-    var wrapper = document.createElement('div');
-    wrapper.className = 'info-hotspot';
-    wrapper.innerHTML =
-      '<strong>' + hotspot.title + '</strong><br>' + hotspot.text;
-    return wrapper;
+  if (screenfull.enabled) {
+    fullscreenToggleElement.addEventListener('click', function () {
+      screenfull.toggle();
+    });
   }
 
   /* ===============================
@@ -291,9 +254,7 @@
   =============================== */
 
   autorotateToggleElement.classList.add('enabled');
-  scenes[0].scene.switchTo();
-  updateSceneName(scenes[0]);
-  updateSceneList(scenes[0]);
-  startAutoTour();
+  updateAutoTourStatus('running');
+  switchScene(scenes[0], false);
 
 })();
